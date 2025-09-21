@@ -1,0 +1,14 @@
+body {
+  font-family: Arial, sans-serif;
+  text-align: center;
+}
+
+#mapa {
+  margin-top: 20px;
+}
+
+.highlight {
+  fill: red !important;
+  stroke: black;
+  stroke-width: 2px;
+}
