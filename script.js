@@ -15,59 +15,54 @@ document.addEventListener("DOMContentLoaded", () => {
     const svgRoot = svgDoc.documentElement;
 
     // Crear un grupo overlay para las ❌
-    let overlay = svgDoc.getElementById("overlay-marks");
-    if (!overlay) {
-      overlay = svgDoc.createElementNS("http://www.w3.org/2000/svg", "g");
-      overlay.setAttribute("id", "overlay-marks");
-      overlay.setAttribute("stroke", "red");
-      overlay.setAttribute("stroke-width", "2");
-      svgRoot.appendChild(overlay);
-    }
+   let overlay = svgDoc.getElementById("overlay-marks");
+if (!overlay) {
+  overlay = svgDoc.createElementNS("http://www.w3.org/2000/svg", "g");
+  overlay.setAttribute("id", "overlay-marks");
+  overlay.setAttribute("stroke", "red");
+  overlay.setAttribute("stroke-width", "3");
+  overlay.setAttribute("stroke-linecap", "round");
+  svgRoot.appendChild(overlay); // lo ponemos arriba del todo
+}
 
     // Función para marcar asiento
-    function marcarAsiento(numero) {
-      // Limpiar ❌ anteriores
-      while (overlay.firstChild) {
-        overlay.removeChild(overlay.firstChild);
-      }
+function marcarAsiento(numero) {
+  while (overlay.firstChild) overlay.removeChild(overlay.firstChild);
 
-      const seat = svgDoc.getElementById(numero);
-      if (!seat) {
-        info.textContent = `❌ Asiento ${numero} no encontrado`;
-        return;
-      }
+  const seat = svgDoc.querySelector(`rect[data-seat='${numero}']`);
+  if (!seat) {
+    info.textContent = `❌ Asiento ${numero} no encontrado`;
+    return;
+  }
 
-      const x = parseFloat(seat.getAttribute("x"));
-      const y = parseFloat(seat.getAttribute("y"));
-      const w = parseFloat(seat.getAttribute("width"));
-      const h = parseFloat(seat.getAttribute("height"));
+  const x = parseFloat(seat.getAttribute("x"));
+  const y = parseFloat(seat.getAttribute("y"));
+  const w = parseFloat(seat.getAttribute("width"));
+  const h = parseFloat(seat.getAttribute("height"));
 
-      // Calcular centro
-      const cx = x + w / 2;
-      const cy = y + h / 2;
-      const offset = Math.min(w, h) / 2;
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const offset = Math.min(w, h) * 0.4; // más pequeño que el cuadrado
 
-      // Dibujar la X
-      const line1 = svgDoc.createElementNS("http://www.w3.org/2000/svg", "line");
-      line1.setAttribute("x1", cx - offset);
-      line1.setAttribute("y1", cy - offset);
-      line1.setAttribute("x2", cx + offset);
-      line1.setAttribute("y2", cy + offset);
+  const line1 = svgDoc.createElementNS("http://www.w3.org/2000/svg", "line");
+  line1.setAttribute("x1", cx - offset);
+  line1.setAttribute("y1", cy - offset);
+  line1.setAttribute("x2", cx + offset);
+  line1.setAttribute("y2", cy + offset);
 
-      const line2 = svgDoc.createElementNS("http://www.w3.org/2000/svg", "line");
-      line2.setAttribute("x1", cx - offset);
-      line2.setAttribute("y1", cy + offset);
-      line2.setAttribute("x2", cx + offset);
-      line2.setAttribute("y2", cy - offset);
+  const line2 = svgDoc.createElementNS("http://www.w3.org/2000/svg", "line");
+  line2.setAttribute("x1", cx - offset);
+  line2.setAttribute("y1", cy + offset);
+  line2.setAttribute("x2", cx + offset);
+  line2.setAttribute("y2", cy - offset);
 
-      overlay.appendChild(line1);
-      overlay.appendChild(line2);
+  overlay.appendChild(line1);
+  overlay.appendChild(line2);
 
-      // Mostrar fila y columna
-      const row = seat.getAttribute("data-row");
-      const col = seat.getAttribute("data-col");
-      info.textContent = `✅ Asiento ${numero} → Fila ${row}, Columna ${col}`;
-    }
+  const row = seat.getAttribute("data-row");
+  const col = seat.getAttribute("data-col");
+  info.textContent = `✅ Asiento ${numero} → Fila ${row}, Columna ${col}`;
+}
 
     // Botón buscar
     button.addEventListener("click", () => {
