@@ -21,21 +21,23 @@ body {
 
 /* Input y botón adaptados */
 input, button {
-  font-size: 1.2em;
+  font-size: 1.1em;
   padding: 10px;
   margin: 5px;
   width: 80%;
   max-width: 400px;
 }
 
-.highlight {
-  fill: red !important;
-  stroke: black;
-  stroke-width: 2px;
-}
-
-/* Mejor visibilidad de la X */
+/* Estilos para la X */
 .marcaX {
   stroke: red;
   stroke-width: 4;
+  stroke-linecap: round;
+}
+
+/* Resalte opcional */
+.highlight {
+  fill: #ffcccc !important;
+  stroke: black;
+  stroke-width: 1px;
 }
