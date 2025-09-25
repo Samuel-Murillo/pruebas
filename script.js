@@ -75,7 +75,7 @@ function seleccionarAsiento() {
   const row = asiento.getAttribute('data-row');
   const col = asiento.getAttribute('data-col');
   if (row && col) {
-    document.getElementById('info').innerText = Asiento ${numero} → Fila ${row}, Columna ${col};
+    document.getElementById('info').innerText = `Asiento ${numero} → Fila ${row}, Columna ${col}`;
   } else {
     document.getElementById('info').innerText = 'Asiento ' + numero;
   }
