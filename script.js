@@ -1,82 +1,82 @@
-document.addEventListener("DOMContentLoaded", () => {
-  const svgObject = document.getElementById("svgMapa");
-  const input = document.getElementById("seatInput");
-  const button = document.getElementById("searchButton");
-  const info = document.getElementById("seatInfo");
+document.getElementById('buscarBtn').addEventListener('click', seleccionarAsiento);
 
-  // Cuando el SVG termina de cargar
-  svgObject.addEventListener("load", () => {
-    const svgDoc = svgObject.contentDocument;
-    if (!svgDoc) {
-      console.error("No se pudo acceder al contenido del SVG");
-      return;
-    }
+function seleccionarAsiento() {
+  const numero = parseInt(document.getElementById("asientoInput").value);
+  const obj = document.getElementById("svgMapa");
+  const svgDoc = obj.contentDocument;
+  if (!svgDoc) {
+    document.getElementById("info").innerText = "El SVG aún no está cargado. Espera un momento e intenta de nuevo.";
+    return;
+  }
 
-    const svgRoot = svgDoc.documentElement;
+  if (!numero || numero < 1) {
+    document.getElementById("info").innerText = "Número de asiento inválido.";
+    return;
+  }
 
-    // Crear un grupo overlay para las ❌
-    let overlay = svgDoc.getElementById("overlay-marks");
-    if (!overlay) {
-      overlay = svgDoc.createElementNS("http://www.w3.org/2000/svg", "g");
-      overlay.setAttribute("id", "overlay-marks");
-      overlay.setAttribute("stroke", "red");
-      overlay.setAttribute("stroke-width", "2");
-      svgRoot.appendChild(overlay);
-    }
+  // Limpiar marcas previas
+  const prev = svgDoc.getElementById('overlay-marks');
+  if (prev) { while (prev.firstChild) prev.removeChild(prev.firstChild); }
 
-    // Función para marcar asiento
-    function marcarAsiento(numero) {
-      // Limpiar ❌ anteriores
-      while (overlay.firstChild) {
-        overlay.removeChild(overlay.firstChild);
-      }
+  // Buscar elemento por id (asientos numerados dentro del SVG)
+  const asiento = svgDoc.getElementById(String(numero));
+  if (!asiento) {
+    document.getElementById("info").innerText = "No se encontró el asiento en el mapa.";
+    return;
+  }
 
-      const seat = svgDoc.getElementById(numero);
-      if (!seat) {
-        info.textContent = `❌ Asiento ${numero} no encontrado`;
-        return;
-      }
+  // Obtener coordenadas: si es rect y tiene x,y,width,height, usar esos valores
+  let x=0,y=0,w=0,h=0;
+  if (asiento.tagName === 'rect' && asiento.hasAttribute('x')) {
+    x = parseFloat(asiento.getAttribute('x'));
+    y = parseFloat(asiento.getAttribute('y'));
+    w = parseFloat(asiento.getAttribute('width'));
+    h = parseFloat(asiento.getAttribute('height'));
+  } else {
+    const bbox = asiento.getBBox();
+    x = bbox.x; y = bbox.y; w = bbox.width; h = bbox.height;
+  }
 
-      const x = parseFloat(seat.getAttribute("x"));
-      const y = parseFloat(seat.getAttribute("y"));
-      const w = parseFloat(seat.getAttribute("width"));
-      const h = parseFloat(seat.getAttribute("height"));
+  const cx = x + w/2;
+  const cy = y + h/2;
+  const size = Math.max(12, Math.min( Math.max(w,h) * 1.1, 80 )) / 2;
 
-      // Calcular centro
-      const cx = x + w / 2;
-      const cy = y + h / 2;
-      const offset = Math.min(w, h) / 2;
+  const svgRoot = svgDoc.documentElement;
+  // create overlay group if not exists
+  let overlay = svgDoc.getElementById('overlay-marks');
+  if (!overlay) {
+    overlay = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'g');
+    overlay.setAttribute('id','overlay-marks');
+    svgRoot.appendChild(overlay);
+  }
 
-      // Dibujar la X
-      const line1 = svgDoc.createElementNS("http://www.w3.org/2000/svg", "line");
-      line1.setAttribute("x1", cx - offset);
-      line1.setAttribute("y1", cy - offset);
-      line1.setAttribute("x2", cx + offset);
-      line1.setAttribute("y2", cy + offset);
+  // Create lines for X
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const line1 = svgDoc.createElementNS(svgNS, 'line');
+  const line2 = svgDoc.createElementNS(svgNS, 'line');
 
-      const line2 = svgDoc.createElementNS("http://www.w3.org/2000/svg", "line");
-      line2.setAttribute("x1", cx - offset);
-      line2.setAttribute("y1", cy + offset);
-      line2.setAttribute("x2", cx + offset);
-      line2.setAttribute("y2", cy - offset);
+  line1.setAttribute('x1', cx - size);
+  line1.setAttribute('y1', cy - size);
+  line1.setAttribute('x2', cx + size);
+  line1.setAttribute('y2', cy + size);
 
-      overlay.appendChild(line1);
-      overlay.appendChild(line2);
+  line2.setAttribute('x1', cx + size);
+  line2.setAttribute('y1', cy - size);
+  line2.setAttribute('x2', cx - size);
+  line2.setAttribute('y2', cy + size);
 
-      // Mostrar fila y columna
-      const row = seat.getAttribute("data-row");
-      const col = seat.getAttribute("data-col");
-      info.textContent = `✅ Asiento ${numero} → Fila ${row}, Columna ${col}`;
-    }
+  line1.setAttribute('class','marcaX');
+  line2.setAttribute('class','marcaX');
 
-    // Botón buscar
-    button.addEventListener("click", () => {
-      const num = parseInt(input.value);
-      if (isNaN(num)) {
-        info.textContent = "⚠️ Ingresa un número válido";
-        return;
-      }
-      marcarAsiento(num);
-    });
-  });
-});
+  overlay.appendChild(line1);
+  overlay.appendChild(line2);
+
+  // Mostrar fila y columna (si existen los atributos data-row y data-col)
+  const row = asiento.getAttribute('data-row');
+  const col = asiento.getAttribute('data-col');
+  if (row && col) {
+    document.getElementById('info').innerText = Asiento ${numero} → Fila ${row}, Columna ${col};
+  } else {
+    document.getElementById('info').innerText = 'Asiento ' + numero;
+  }
+}
