@@ -1,22 +1,21 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <title>Mapa de Asientos</title>
+  <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mapa de Asientos</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <h1>Reserva de Asientos</h1>
 
-  <input type="number" id="asientoInput" placeholder="Ingresa tu número de asiento">
-  <button onclick="seleccionarAsiento()">Buscar Asiento</button>
+  <input type="number" id="asientoInput" placeholder="Ingresa tu número de asiento" min="1">
+  <button id="buscarBtn">Buscar Asiento</button>
 
   <p id="info"></p>
 
-  <!-- SVG -->
   <div id="mapa">
-    <object id="svgMapa" data="mapa_ready.svg" type="image/svg+xml"></object>
+    <object id="svgMapa" data="mapa_ready_fixed.svg" type="image/svg+xml"></object>
   </div>
 
   <script src="script.js"></script>
