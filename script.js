@@ -58,12 +58,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const medH = heights.length ? median(heights) : 0;
 
     const sizeTol = 0.6; // aceptar entre 60% y 140% del tamaño medio
+    // Filtrar solo por tamaño similar (más inclusivo). Esto evita excluir asientos por fill.
     const candidates = rectInfos.filter(i => {
       if (!i.w || !i.h) return false;
       const szOk = i.w >= medW*sizeTol && i.w <= medW*(2-sizeTol) && i.h >= medH*sizeTol && i.h <= medH*(2-sizeTol);
-      // excluir los pequeños cuadros de numeración verdes (por ejemplo tienen fill diferente)
-      const isLikelySeat = szOk && !(i.fill && i.fill.toLowerCase().includes("#c"));
-      return isLikelySeat;
+      return szOk;
     });
 
     if (candidates.length === 0) {
@@ -113,15 +112,17 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     });
 
-    // Mostrar pequeño debug para confirmar la posición de algunos asientos
+    // Debug: construir resumen de filas detectadas
+    const rowSummaries = validRows.map((r, i) => `fila${i+1}:cy=${Math.round(r.cy)} count=${r.items.length}`);
     const firstAssigned = svgDoc.querySelector("rect[data-seat='1']");
+    let debugMsg = `Asignados ${seatIndex} asientos. Filas detectadas: ${rowSummaries.length}. `;
+    debugMsg += rowSummaries.join(' | ');
     if (firstAssigned) {
       const fx = firstAssigned.getAttribute('x');
       const fy = firstAssigned.getAttribute('y');
-      info.textContent = `Asignados ${seatIndex} asientos. Asiento 1 en x=${fx}, y=${fy}`;
-    } else {
-      info.textContent = `Asignados ${seatIndex} asientos.`;
+      debugMsg += ` → Asiento1 x=${fx}, y=${fy}`;
     }
+    info.textContent = debugMsg;
 
 
     let lastSeat = null;
