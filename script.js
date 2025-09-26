@@ -41,6 +41,16 @@ document.addEventListener("DOMContentLoaded", () => {
       return fill === "#fff" || fill === "white" || fill === null || fill === "";
     });
 
+    // Ordenar por y (de menor a mayor, de abajo hacia arriba), luego por x (de menor a mayor, de izquierda a derecha)
+    seats.sort((a, b) => {
+      const ay = parseFloat(a.getAttribute("y"));
+      const by = parseFloat(b.getAttribute("y"));
+      if (ay !== by) return ay - by;
+      const ax = parseFloat(a.getAttribute("x"));
+      const bx = parseFloat(b.getAttribute("x"));
+      return ax - bx;
+    });
+
     // Determinar columnas por la estructura visual (ajusta si es necesario)
     const cols = 26;
     // Numerar por filas: primero fila 1, columna 1 a 26; luego fila 2, etc.
