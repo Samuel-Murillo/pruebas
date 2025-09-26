@@ -5,6 +5,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const input = document.getElementById("seatInput");
   const button = document.getElementById("searchButton");
   const info = document.getElementById("seatInfo");
+  const nameInput = document.getElementById("nameInput");
+  const surnameInput = document.getElementById("surnameInput");
+  const searchByNameBtn = document.getElementById("searchByName");
+  const nameInfo = document.getElementById("nameInfo");
 
   if (!svgObject) {
     alert("No se encontró el objeto SVG en la página");
@@ -184,6 +188,36 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
       marcarAsiento(num);
+    });
+
+    // Cargar asientos.json si existe
+    let asientoList = null;
+    fetch('asientos.json').then(r => {
+      if (!r.ok) throw new Error('no-json');
+      return r.json();
+    }).then(data => {
+      asientoList = data;
+      console.log('Cargado asientos.json', asientoList.length);
+      nameInfo.textContent = `Cargado ${asientoList.length} entradas.`;
+    }).catch(() => {
+      console.log('No se encontró asientos.json — usa tools/convert_xlsx_to_json.js para generar uno desde listado_asientos.xlsx');
+    });
+
+    searchByNameBtn.addEventListener('click', () => {
+      if (!asientoList) { nameInfo.textContent = '❌ No hay lista de asientos cargada.'; return; }
+      const nombre = (nameInput.value||'').trim().toLowerCase();
+      const apellido = (surnameInput.value||'').trim().toLowerCase();
+      if (!nombre && !apellido) { nameInfo.textContent = '⚠️ Ingresa nombre o apellido.'; return; }
+      const found = asientoList.find(item => {
+        const n = (item.Nombre||item.name||'').toString().toLowerCase();
+        const s = (item.Apellido||item.surname||item.lastName||'').toString().toLowerCase();
+        return (nombre && n.includes(nombre) || !nombre) && (apellido && s.includes(apellido) || !apellido);
+      });
+      if (!found) { nameInfo.textContent = '❌ No se encontró la persona.'; return; }
+      const seatNum = parseInt(found.Asiento || found.Seat || found.seat || found.asiento || found.AsientoNum || found.number);
+      if (!seatNum) { nameInfo.textContent = `❌ Entrada encontrada pero sin número de asiento: ${JSON.stringify(found)}`; return; }
+      nameInfo.textContent = `✅ ${found.Nombre||found.name} ${found.Apellido||found.surname} → Asiento ${seatNum}`;
+      marcarAsiento(seatNum);
     });
   });
 

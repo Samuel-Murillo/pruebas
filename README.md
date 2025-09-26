@@ -9,3 +9,16 @@ Archivos incluidos:
 - style.css
 - script.js
 - mapa_ready_fixed.svg (SVG con IDs asignados fila-columna)
+
+Generar `asientos.json` desde Excel:
+
+1) Instalar Node.js si no está instalado.
+2) Abrir una terminal en la carpeta del proyecto.
+3) Instalar la dependencia: `npm install xlsx`.
+4) Ejecutar:
+
+	node tools/convert_xlsx_to_json.js listado_asientos.xlsx asientos.json
+
+5) Abrir `index.html` en el navegador. La búsqueda por nombre usará `asientos.json`.
+
+El Excel debe tener columnas `Nombre`, `Apellido`, `Asiento` (o variantes `name`, `surname`, `seat`).
