@@ -21,6 +21,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   svgObject.addEventListener("load", () => {
     // Crear helper initSvg para poder invocarlo también si el SVG ya está disponible
+    let overlay = null; // declarado aquí para que marcarAsiento lo vea
     function initSvg(svgDoc) {
       if (!svgDoc) {
         console.error("initSvg: svgDoc nulo");
@@ -29,7 +30,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       try {
         const svgRoot = svgDoc.documentElement;
-        let overlay = svgDoc.getElementById("overlay-marks");
+        overlay = svgDoc.getElementById("overlay-marks");
         if (!overlay) {
           overlay = svgDoc.createElementNS("http://www.w3.org/2000/svg", "g");
           overlay.setAttribute("id", "overlay-marks");
