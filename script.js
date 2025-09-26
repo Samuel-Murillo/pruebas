@@ -45,6 +45,49 @@ document.addEventListener("DOMContentLoaded", () => {
           svgRoot.appendChild(overlay);
         }
 
+        // Intentar detectar el contorno (borde negro grueso) que delimita el bloque de asientos
+        let seatingBBox = null;
+        try {
+          const allElems = Array.from(svgDoc.querySelectorAll('*'));
+          function getStrokeWidth(el){
+            try {
+              const win = svgDoc.defaultView || window;
+              const cs = win.getComputedStyle(el);
+              const sw = cs && cs.getPropertyValue('stroke-width');
+              if (sw) return parseFloat(sw) || 0;
+            } catch(e){}
+            return parseFloat(el.getAttribute('stroke-width')) || 0;
+          }
+          // buscar elementos con stroke oscuro y ancho grande
+          const borderCandidates = allElems.map(el => {
+            const stroke = (el.getAttribute && el.getAttribute('stroke')) || '';
+            const sw = getStrokeWidth(el);
+            return { el, stroke: (stroke||'').toString().toLowerCase(), sw };
+          }).filter(o => o.sw >= 4 && (o.stroke === 'black' || o.stroke === '#000' || o.stroke === '#000000' || o.stroke === '' ));
+          if (borderCandidates.length) {
+            // seleccionar el que tiene mayor área de bbox
+            let best = null; let bestArea = 0;
+            for (const bc of borderCandidates) {
+              try {
+                const bb = bc.el.getBBox();
+                const area = bb.width * bb.height;
+                if (area > bestArea) { bestArea = area; best = { el: bc.el, bb }; }
+              } catch(e) { /* skip */ }
+            }
+            if (best) {
+              seatingBBox = best.bb;
+              // reducir un poco la caja para excluir el stroke
+              seatingBBox.x += Math.max(2, Math.floor(bestArea? (Math.min(best.bb.width,best.bb.height)*0.005) : 2));
+              seatingBBox.y += Math.max(2, Math.floor(bestArea? (Math.min(best.bb.width,best.bb.height)*0.005) : 2));
+              seatingBBox.width = Math.max(0, best.bb.width - 4);
+              seatingBBox.height = Math.max(0, best.bb.height - 4);
+              console.log('initSvg: detectado borde contenedor, bbox approximada:', seatingBBox);
+            }
+          }
+        } catch(e) {
+          console.warn('initSvg: error detectando borde contenedor:', e);
+        }
+
             // Detectar todos los rects candidatos (incluir todos los rect por seguridad) y tomar medidas
             const allRects = Array.from(svgDoc.querySelectorAll("rect"));
     function isWhiteish(fill) {
@@ -94,6 +137,50 @@ document.addEventListener("DOMContentLoaded", () => {
       console.log(`initSvg: excluidos ${before - candidates.length} rects por color de relleno (probables etiquetas)`);
     } else {
       console.log('initSvg: no se aplicó filtro por color porque habría quedado muy pocos candidatos');
+    }
+
+    // Filtrar por banda horizontal principal (excluir etiquetas en el margen izquierdo/derecho)
+    try {
+      const xs = candidates.map(c=>c.cx).sort((a,b)=>a-b);
+      const n = xs.length;
+      if (n > 6) {
+        const leftIdx = Math.max(0, Math.floor(n * 0.04));
+        const rightIdx = Math.min(n-1, Math.ceil(n * 0.96));
+        const leftBound = xs[leftIdx];
+        const rightBound = xs[rightIdx];
+        const horizFiltered = candidates.filter(c => c.cx >= leftBound && c.cx <= rightBound);
+        if (horizFiltered.length >= Math.max(8, Math.round(candidates.length * 0.6))) {
+          console.log(`initSvg: filtrados ${candidates.length - horizFiltered.length} rects por estar fuera de la banda horizontal principal`);
+          candidates = horizFiltered;
+        } else {
+          console.log('initSvg: filtro horizontal no aplicado (habría quedado muy pocos candidatos)');
+        }
+      }
+    } catch (e) {
+      console.warn('initSvg: error aplicando filtro horizontal:', e);
+    }
+
+    // Si detectamos seatingBBox, filtrar los candidatos por estar dentro de esa caja
+    try {
+      if (seatingBBox) {
+        const preBBox = candidates.length;
+        const beforeCandidates = candidates.slice();
+        const bbMinX = seatingBBox.x;
+        const bbMaxX = seatingBBox.x + seatingBBox.width;
+        const bbMinY = seatingBBox.y;
+        const bbMaxY = seatingBBox.y + seatingBBox.height;
+        const bboxFiltered = candidates.filter(c => (c.cx >= bbMinX && c.cx <= bbMaxX && c.cy >= bbMinY && c.cy <= bbMaxY));
+        if (bboxFiltered.length >= Math.max(8, Math.round(preBBox * 0.5))) {
+          candidates = bboxFiltered;
+          console.log(`initSvg: aplicó filtro por seatingBBox, candidatos: ${preBBox} -> ${candidates.length}`);
+        } else {
+          console.log('initSvg: filtro seatingBBox no aplicado (reduciría demasiado los candidatos)');
+        }
+      } else {
+        console.log('initSvg: seatingBBox no detectado, no se aplica filtro por contenedor');
+      }
+    } catch (e) {
+      console.warn('initSvg: error aplicando filtro seatingBBox:', e);
     }
 
     if (candidates.length === 0) {
@@ -173,6 +260,36 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!orig) ci.r.setAttribute("data-orig-fill", ci.r.getAttribute("fill") || "#ffffff");
       });
     });
+
+    // Diagnóstico: quién quedó con data-seat='1'
+    try {
+      const seat1 = svgDoc.querySelector("rect[data-seat='1']");
+      if (seat1) {
+        const sx = seat1.getAttribute('x');
+        const sy = seat1.getAttribute('y');
+        const sw = seat1.getAttribute('width');
+        const sh = seat1.getAttribute('height');
+        const sf = seat1.getAttribute('fill');
+        console.log(`diagnóstico: asiento1 -> x=${sx}, y=${sy}, w=${sw}, h=${sh}, fill=${sf}`);
+        // Dibujar rect debug azul en overlay para visualizar exactamente cuál se asignó
+        try {
+          if (overlay) {
+            const dbg = svgDoc.createElementNS('http://www.w3.org/2000/svg','rect');
+            dbg.setAttribute('x', sx);
+            dbg.setAttribute('y', sy);
+            dbg.setAttribute('width', sw);
+            dbg.setAttribute('height', sh);
+            dbg.setAttribute('fill', 'none');
+            dbg.setAttribute('stroke', 'blue');
+            dbg.setAttribute('stroke-width', '3');
+            dbg.setAttribute('id', 'debug-seat1');
+            overlay.appendChild(dbg);
+          }
+        } catch(e) { console.warn('diagnóstico: no se pudo dibujar debug rect', e); }
+      } else {
+        console.log('diagnóstico: no se asignó data-seat=1 a ningún rect');
+      }
+    } catch(e) { console.warn('diagnóstico: error al localizar asiento1', e); }
 
         // Debug: construir resumen de filas detectadas
         const rowSummaries = validRows.map((r, i) => `fila${i+1}:cy=${Math.round(r.cy)} count=${r.items.length}`);
