@@ -131,22 +131,31 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let lastSeat = null;
     function marcarAsiento(numero) {
-      while (overlay.firstChild) overlay.removeChild(overlay.firstChild);
+      try {
+        while (overlay.firstChild) overlay.removeChild(overlay.firstChild);
 
-      // Restaurar color del último asiento seleccionado
-      if (lastSeat) {
-        lastSeat.setAttribute("fill", "#fff"); // color original, ajusta si es necesario
-      }
+        // Restaurar color del último asiento seleccionado usando data-orig-fill si existe
+        if (lastSeat) {
+          const orig = lastSeat.getAttribute('data-orig-fill');
+          if (orig) lastSeat.setAttribute('fill', orig);
+          else lastSeat.removeAttribute('fill');
+          lastSeat = null;
+        }
 
-      const seat = svgDoc.querySelector(`rect[data-seat='${numero}']`);
-      if (!seat) {
-        info.textContent = `❌ Asiento ${numero} no encontrado`;
-        return;
-      }
+        const seat = svgDoc.querySelector(`rect[data-seat='${numero}']`);
+        if (!seat) {
+          info.textContent = `❌ Asiento ${numero} no encontrado`;
+          return;
+        }
 
-      // Cambiar color del asiento seleccionado
-      seat.setAttribute("fill", "#ff9800"); // naranja
-      lastSeat = seat;
+        // Guardar color original si no existe
+        if (!seat.getAttribute('data-orig-fill')) {
+          seat.setAttribute('data-orig-fill', seat.getAttribute('fill') || '#ffffff');
+        }
+
+        // Cambiar color del asiento seleccionado
+        seat.setAttribute("fill", "#ff9800"); // naranja
+        lastSeat = seat;
 
       const x = parseFloat(seat.getAttribute("x"));
       const y = parseFloat(seat.getAttribute("y"));
@@ -175,6 +184,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const row = seat.getAttribute("data-row");
       const col = seat.getAttribute("data-col");
       info.textContent = `✅ Asiento ${numero} → Fila ${row}, Columna ${col}`;
+      } catch (e) {
+        console.error('Error en marcarAsiento:', e);
+        info.textContent = '❌ Error al marcar asiento: ' + (e && e.message ? e.message : e);
+      }
     }
 
     button.addEventListener("click", () => {
@@ -216,7 +229,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function normalize(s) {
-      return (s||'').toString().trim().toLowerCase().normalize('NFD').replace(/[0-6f]/g, '').replace(/[\u0300-\u036f]/g,'');
+        try {
+          return (s||'').toString().trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\uFE0E/g,'');
+        } catch (e) {
+          return (s||'').toString().trim().toLowerCase();
+        }
     }
 
     // Cargar asientos.json si existe, si no intentar cargar CSV `nombresConAsientos.csv`
