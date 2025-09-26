@@ -270,32 +270,32 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // Cargar asientos.json si existe, si no intentar cargar CSV `nombresConAsientos.csv`
+    // Intentar primero cargar CSV `nombresConAsientos.csv` (evita 404 si no existe asientos.json)
     let asientoList = null;
-    fetch('asientos.json').then(r => {
-      if (!r.ok) throw new Error('no-json');
-      return r.json();
-    }).then(data => {
+    fetch('nombresConAsientos.csv').then(r => {
+      if (!r.ok) throw new Error('no-csv');
+      return r.text();
+    }).then(text => {
+      const rows = parseCSV(text);
+      if (!rows.length) { nameInfo.textContent = '❌ CSV vacío o inválido.'; return; }
+      const headers = rows[0].map(h => h.trim());
+      const data = rows.slice(1).map(rw => {
+        const obj = {};
+        for (let i=0;i<headers.length;i++) obj[headers[i]] = (rw[i]||'').trim();
+        return obj;
+      });
       asientoList = data;
-      console.log('Cargado asientos.json', asientoList.length);
-      nameInfo.textContent = `Cargado ${asientoList.length} entradas.`;
+      console.log('Cargado CSV nombresConAsientos.csv', asientoList.length);
+      nameInfo.textContent = `Cargado ${asientoList.length} entradas desde CSV.`;
     }).catch(() => {
-      // intentar CSV
-      fetch('nombresConAsientos.csv').then(r => {
-        if (!r.ok) throw new Error('no-csv');
-        return r.text();
-      }).then(text => {
-        const rows = parseCSV(text);
-        if (!rows.length) { nameInfo.textContent = '❌ CSV vacío o inválido.'; return; }
-        const headers = rows[0].map(h => h.trim());
-        const data = rows.slice(1).map(rw => {
-          const obj = {};
-          for (let i=0;i<headers.length;i++) obj[headers[i]] = (rw[i]||'').trim();
-          return obj;
-        });
+      // Si no hay CSV, intentar asientos.json
+      fetch('asientos.json').then(r => {
+        if (!r.ok) throw new Error('no-json');
+        return r.json();
+      }).then(data => {
         asientoList = data;
-        console.log('Cargado CSV nombresConAsientos.csv', asientoList.length);
-        nameInfo.textContent = `Cargado ${asientoList.length} entradas desde CSV.`;
+        console.log('Cargado asientos.json', asientoList.length);
+        nameInfo.textContent = `Cargado ${asientoList.length} entradas.`;
       }).catch(() => {
         console.log('No se encontró asientos.json ni nombresConAsientos.csv');
       });
