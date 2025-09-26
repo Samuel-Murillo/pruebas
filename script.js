@@ -20,25 +20,26 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   svgObject.addEventListener("load", () => {
-    const svgDoc = svgObject.contentDocument;
-    if (!svgDoc) {
-      console.error("No se pudo acceder al contenido del SVG");
-      info.textContent = "❌ No se pudo cargar el mapa de asientos.";
-      return;
-    }
+    // Crear helper initSvg para poder invocarlo también si el SVG ya está disponible
+    function initSvg(svgDoc) {
+      if (!svgDoc) {
+        console.error("initSvg: svgDoc nulo");
+        info.textContent = "❌ No se pudo cargar el mapa de asientos.";
+        return;
+      }
+      try {
+        const svgRoot = svgDoc.documentElement;
+        let overlay = svgDoc.getElementById("overlay-marks");
+        if (!overlay) {
+          overlay = svgDoc.createElementNS("http://www.w3.org/2000/svg", "g");
+          overlay.setAttribute("id", "overlay-marks");
+          overlay.setAttribute("stroke", "red");
+          overlay.setAttribute("stroke-width", "2");
+          svgRoot.appendChild(overlay);
+        }
 
-    const svgRoot = svgDoc.documentElement;
-    let overlay = svgDoc.getElementById("overlay-marks");
-    if (!overlay) {
-      overlay = svgDoc.createElementNS("http://www.w3.org/2000/svg", "g");
-      overlay.setAttribute("id", "overlay-marks");
-      overlay.setAttribute("stroke", "red");
-      overlay.setAttribute("stroke-width", "2");
-      svgRoot.appendChild(overlay);
-    }
-
-    // Detectar todos los rects candidatos y tomar medidas para identificar el bloque principal de asientos
-    const allRects = Array.from(svgDoc.querySelectorAll("rect.cls-3"));
+        // Detectar todos los rects candidatos y tomar medidas para identificar el bloque principal de asientos
+        const allRects = Array.from(svgDoc.querySelectorAll("rect.cls-3"));
     const rectInfos = allRects.map(r => {
       const x = parseFloat(r.getAttribute("x")) || 0;
       const y = parseFloat(r.getAttribute("y")) || 0;
@@ -116,18 +117,50 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     });
 
-    // Debug: construir resumen de filas detectadas
-    const rowSummaries = validRows.map((r, i) => `fila${i+1}:cy=${Math.round(r.cy)} count=${r.items.length}`);
-    const firstAssigned = svgDoc.querySelector("rect[data-seat='1']");
-    let debugMsg = `Asignados ${seatIndex} asientos. Filas detectadas: ${rowSummaries.length}. `;
-    debugMsg += rowSummaries.join(' | ');
-    if (firstAssigned) {
-      const fx = firstAssigned.getAttribute('x');
-      const fy = firstAssigned.getAttribute('y');
-      debugMsg += ` → Asiento1 x=${fx}, y=${fy}`;
-    }
-    info.textContent = debugMsg;
+        // Debug: construir resumen de filas detectadas
+        const rowSummaries = validRows.map((r, i) => `fila${i+1}:cy=${Math.round(r.cy)} count=${r.items.length}`);
+        const firstAssigned = svgDoc.querySelector("rect[data-seat='1']");
+        let debugMsg = `Asignados ${seatIndex} asientos. Filas detectadas: ${rowSummaries.length}. `;
+        debugMsg += rowSummaries.join(' | ');
+        if (firstAssigned) {
+          const fx = firstAssigned.getAttribute('x');
+          const fy = firstAssigned.getAttribute('y');
+          debugMsg += ` → Asiento1 x=${fx}, y=${fy}`;
+        }
+  // No mostrar debug en pantalla; dejar el área de info limpia y enviar debug a la consola
+  info.textContent = '';
+  console.log(debugMsg);
 
+        // Exponer variables en closure para que otras partes puedan usarlas
+        return { svgDoc, overlay };
+      } catch (err) {
+        console.error('Error initSvg:', err);
+        info.textContent = '❌ Error inicializando mapa: ' + (err.message || err);
+      }
+    }
+
+    // Llamar initSvg cuando el evento load se dispara
+    const svgDocFromEvent = svgObject.contentDocument;
+    initSvg(svgDocFromEvent);
+
+
+  // Intentar inicializar inmediatamente si el SVG ya está cargado (algunos navegadores no disparan load)
+  setTimeout(() => {
+    try {
+      const immediateDoc = svgObject.contentDocument || (svgObject.getSVGDocument && svgObject.getSVGDocument());
+      if (immediateDoc) {
+        console.log('SVG ya disponible, inicializando...');
+        // llamar a la misma initSvg definida en el load handler: buscarla en el scope
+        // para evitar duplicar lógica, re-disparar manualmente un evento load
+        const evt = new Event('load');
+        svgObject.dispatchEvent(evt);
+      } else {
+        console.log('SVG aún no disponible tras timeout');
+      }
+    } catch (e) {
+      console.warn('Error comprobando SVG inmediato:', e);
+    }
+  }, 300);
 
     let lastSeat = null;
     function marcarAsiento(numero) {
