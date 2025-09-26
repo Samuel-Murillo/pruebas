@@ -1,13 +1,25 @@
 document.addEventListener("DOMContentLoaded", () => {
+
+  // Verificación de elementos
   const svgObject = document.getElementById("svgMapa");
   const input = document.getElementById("seatInput");
   const button = document.getElementById("searchButton");
   const info = document.getElementById("seatInfo");
 
+  if (!svgObject) {
+    alert("No se encontró el objeto SVG en la página");
+    return;
+  }
+  if (!input || !button || !info) {
+    alert("No se encontraron los elementos del formulario. Verifica los IDs en index.html");
+    return;
+  }
+
   svgObject.addEventListener("load", () => {
     const svgDoc = svgObject.contentDocument;
     if (!svgDoc) {
       console.error("No se pudo acceder al contenido del SVG");
+      info.textContent = "❌ No se pudo cargar el mapa de asientos.";
       return;
     }
 
@@ -21,19 +33,24 @@ document.addEventListener("DOMContentLoaded", () => {
       svgRoot.appendChild(overlay);
     }
 
-    // Tomar todos los rectángulos con class="cls-3"
-    const seats = Array.from(svgDoc.querySelectorAll("rect.cls-3"));
+    // Solo numerar los rectángulos blancos (asientos)
+    // Se asume que los asientos tienen fill="#fff" o fill="white" y los verdes no
+    const allRects = Array.from(svgDoc.querySelectorAll("rect.cls-3"));
+    const seats = allRects.filter(rect => {
+      const fill = rect.getAttribute("fill");
+      return fill === "#fff" || fill === "white" || fill === null || fill === "";
+    });
 
-    // Calcular filas y columnas automáticamente
-    const cols = 26; // ajusta este valor según corresponda
-    const rows = Math.ceil(seats.length / cols);
-
-    // Asignar número, fila y columna a cada rect
+    // Determinar columnas por la estructura visual (ajusta si es necesario)
+    const cols = 26;
+    // Numerar por filas: primero fila 1, columna 1 a 26; luego fila 2, etc.
     seats.forEach((rect, i) => {
+      const row = Math.floor(i / cols) + 1;
+      const col = (i % cols) + 1;
       const seatNum = i + 1;
       rect.setAttribute("data-seat", seatNum);
-      rect.setAttribute("data-row", Math.floor(i / cols) + 1);
-      rect.setAttribute("data-col", (i % cols) + 1);
+      rect.setAttribute("data-row", row);
+      rect.setAttribute("data-col", col);
     });
 
 
@@ -86,6 +103,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     button.addEventListener("click", () => {
+      if (!svgObject.contentDocument) {
+        info.textContent = "❌ El mapa SVG no está disponible.";
+        return;
+      }
       const num = parseInt(input.value);
       if (isNaN(num)) {
         info.textContent = "⚠️ Ingresa un número válido";
@@ -94,4 +115,11 @@ document.addEventListener("DOMContentLoaded", () => {
       marcarAsiento(num);
     });
   });
+
+  // Si el SVG no carga en 3 segundos, mostrar advertencia
+  setTimeout(() => {
+    if (!svgObject.contentDocument) {
+      info.textContent = "⚠️ El mapa de asientos no se ha cargado. Intenta recargar la página.";
+    }
+  }, 3000);
 });
