@@ -36,14 +36,25 @@ document.addEventListener("DOMContentLoaded", () => {
       rect.setAttribute("data-col", (i % cols) + 1);
     });
 
+
+    let lastSeat = null;
     function marcarAsiento(numero) {
       while (overlay.firstChild) overlay.removeChild(overlay.firstChild);
+
+      // Restaurar color del último asiento seleccionado
+      if (lastSeat) {
+        lastSeat.setAttribute("fill", "#fff"); // color original, ajusta si es necesario
+      }
 
       const seat = svgDoc.querySelector(`rect[data-seat='${numero}']`);
       if (!seat) {
         info.textContent = `❌ Asiento ${numero} no encontrado`;
         return;
       }
+
+      // Cambiar color del asiento seleccionado
+      seat.setAttribute("fill", "#ff9800"); // naranja
+      lastSeat = seat;
 
       const x = parseFloat(seat.getAttribute("x"));
       const y = parseFloat(seat.getAttribute("y"));
