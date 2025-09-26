@@ -190,7 +190,36 @@ document.addEventListener("DOMContentLoaded", () => {
       marcarAsiento(num);
     });
 
-    // Cargar asientos.json si existe
+    // Utilidades: parse CSV y normalizar strings
+    function parseCSV(text) {
+      const rows = [];
+      let cur = '';
+      let row = [];
+      let inQuotes = false;
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (ch === '"') {
+          if (inQuotes && text[i+1] === '"') { cur += '"'; i++; continue; }
+          inQuotes = !inQuotes; continue;
+        }
+        if (ch === ',' && !inQuotes) { row.push(cur); cur = ''; continue; }
+        if ((ch === '\r' || ch === '\n') && !inQuotes) {
+          if (cur !== '' || row.length) { row.push(cur); rows.push(row); row = []; cur = ''; }
+          // handle \r\n
+          if (ch === '\r' && text[i+1] === '\n') i++;
+          continue;
+        }
+        cur += ch;
+      }
+      if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
+      return rows;
+    }
+
+    function normalize(s) {
+      return (s||'').toString().trim().toLowerCase().normalize('NFD').replace(/[0-6f]/g, '').replace(/[\u0300-\u036f]/g,'');
+    }
+
+    // Cargar asientos.json si existe, si no intentar cargar CSV `nombresConAsientos.csv`
     let asientoList = null;
     fetch('asientos.json').then(r => {
       if (!r.ok) throw new Error('no-json');
@@ -200,23 +229,47 @@ document.addEventListener("DOMContentLoaded", () => {
       console.log('Cargado asientos.json', asientoList.length);
       nameInfo.textContent = `Cargado ${asientoList.length} entradas.`;
     }).catch(() => {
-      console.log('No se encontró asientos.json — usa tools/convert_xlsx_to_json.js para generar uno desde listado_asientos.xlsx');
+      // intentar CSV
+      fetch('nombresConAsientos.csv').then(r => {
+        if (!r.ok) throw new Error('no-csv');
+        return r.text();
+      }).then(text => {
+        const rows = parseCSV(text);
+        if (!rows.length) { nameInfo.textContent = '❌ CSV vacío o inválido.'; return; }
+        const headers = rows[0].map(h => h.trim());
+        const data = rows.slice(1).map(rw => {
+          const obj = {};
+          for (let i=0;i<headers.length;i++) obj[headers[i]] = (rw[i]||'').trim();
+          return obj;
+        });
+        asientoList = data;
+        console.log('Cargado CSV nombresConAsientos.csv', asientoList.length);
+        nameInfo.textContent = `Cargado ${asientoList.length} entradas desde CSV.`;
+      }).catch(() => {
+        console.log('No se encontró asientos.json ni nombresConAsientos.csv');
+      });
     });
 
     searchByNameBtn.addEventListener('click', () => {
       if (!asientoList) { nameInfo.textContent = '❌ No hay lista de asientos cargada.'; return; }
-      const nombre = (nameInput.value||'').trim().toLowerCase();
-      const apellido = (surnameInput.value||'').trim().toLowerCase();
-      if (!nombre && !apellido) { nameInfo.textContent = '⚠️ Ingresa nombre o apellido.'; return; }
+      const nombreRaw = (nameInput.value||'').trim();
+      const apellidoRaw = (surnameInput.value||'').trim();
+      if (!nombreRaw && !apellidoRaw) { nameInfo.textContent = '⚠️ Ingresa nombre o apellido.'; return; }
+      const nombre = normalize(nombreRaw);
+      const apellido = normalize(apellidoRaw);
       const found = asientoList.find(item => {
-        const n = (item.Nombre||item.name||'').toString().toLowerCase();
-        const s = (item.Apellido||item.surname||item.lastName||'').toString().toLowerCase();
-        return (nombre && n.includes(nombre) || !nombre) && (apellido && s.includes(apellido) || !apellido);
+        const n = normalize(item.Nombre || item.name || item.nombre || '');
+        const s = normalize(item.Apellido || item.surname || item.apellido || '');
+        // coincidencia parcial: si se ingresó nombre, comprobar en campo nombre; si apellido, en apellido
+        const nameMatch = !nombre || n.includes(nombre) || (n.split(' ').some(p=>p.includes(nombre)));
+        const surnameMatch = !apellido || s.includes(apellido) || (s.split(' ').some(p=>p.includes(apellido)));
+        return nameMatch && surnameMatch;
       });
       if (!found) { nameInfo.textContent = '❌ No se encontró la persona.'; return; }
-      const seatNum = parseInt(found.Asiento || found.Seat || found.seat || found.asiento || found.AsientoNum || found.number);
+      const seatStr = found.Asiento || found.Seat || found.seat || found.asiento || found.AsientoNum || found.number || found['Asiento '];
+      const seatNum = parseInt(seatStr);
       if (!seatNum) { nameInfo.textContent = `❌ Entrada encontrada pero sin número de asiento: ${JSON.stringify(found)}`; return; }
-      nameInfo.textContent = `✅ ${found.Nombre||found.name} ${found.Apellido||found.surname} → Asiento ${seatNum}`;
+      nameInfo.textContent = `✅ ${found.Nombre||found.name||found.nombre} ${found.Apellido||found.surname||found.apellido} → Asiento ${seatNum}`;
       marcarAsiento(seatNum);
     });
   });
