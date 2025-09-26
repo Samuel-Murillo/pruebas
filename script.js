@@ -47,6 +47,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
             // Detectar todos los rects candidatos (incluir todos los rect por seguridad) y tomar medidas
             const allRects = Array.from(svgDoc.querySelectorAll("rect"));
+    function isWhiteish(fill) {
+      if (!fill) return true;
+      const f = (fill||'').toString().trim().toLowerCase();
+      if (f === 'none' || f === '') return true;
+      if (f === '#fff' || f === '#ffffff' || f === 'white' || f === 'rgb(255,255,255)' || f === 'rgb(255, 255, 255)') return true;
+      return false;
+    }
+
     const rectInfos = allRects.map(r => {
       const x = parseFloat(r.getAttribute("x")) || 0;
       const y = parseFloat(r.getAttribute("y")) || 0;
@@ -55,7 +63,8 @@ document.addEventListener("DOMContentLoaded", () => {
       const cx = x + w / 2;
       const cy = y + h / 2;
       const fill = r.getAttribute("fill");
-      return { r, x, y, w, h, cx, cy, fill };
+      const isLabelFill = !isWhiteish(fill);
+      return { r, x, y, w, h, cx, cy, fill, isLabelFill };
     });
 
     // Filtrar por tamaño: calcular mediana de anchuras/alturas y mantener rects similares
@@ -71,11 +80,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const sizeTol = 0.6; // aceptar entre 60% y 140% del tamaño medio
     // Filtrar solo por tamaño similar (más inclusivo). Esto evita excluir asientos por fill.
-    const candidates = rectInfos.filter(i => {
+    let candidates = rectInfos.filter(i => {
       if (!i.w || !i.h) return false;
       const szOk = i.w >= medW*sizeTol && i.w <= medW*(2-sizeTol) && i.h >= medH*sizeTol && i.h <= medH*(2-sizeTol);
       return szOk;
     });
+
+    // Excluir rects con relleno claramente no-blanco (etiquetas verdes), pero hacer fallback
+    const before = candidates.length;
+    const filteredByFill = candidates.filter(c => !c.isLabelFill);
+    if (filteredByFill.length >= Math.max(8, Math.round(before*0.5))) {
+      candidates = filteredByFill;
+      console.log(`initSvg: excluidos ${before - candidates.length} rects por color de relleno (probables etiquetas)`);
+    } else {
+      console.log('initSvg: no se aplicó filtro por color porque habría quedado muy pocos candidatos');
+    }
 
     if (candidates.length === 0) {
       info.textContent = "❌ No se detectaron asientos válidos en el SVG.";
@@ -109,37 +128,35 @@ document.addEventListener("DOMContentLoaded", () => {
     // Ordenar filas por cy descendente (bottom -> top)
     validRows.sort((a,b) => b.cy - a.cy);
 
-    // Excluir filas de etiquetas (recuadros verdes) buscando la ventana más larga
-    // de filas con separación regular (espaciado similar entre filas de asientos).
+    // Excluir filas de etiquetas (recuadros verdes) buscando la banda vertical
+    // que contiene la mayoría de los centros de los rects (densest-cy-window).
     let seatingRows = validRows;
-    if (validRows.length > 1) {
-      const diffs = [];
-      for (let i = 0; i < validRows.length - 1; i++) {
-        diffs.push(Math.abs(validRows[i].cy - validRows[i+1].cy));
-      }
-      const medSpacing = median(diffs);
-      const tolSpacing = Math.max(2, medSpacing * 1.6);
-
-      // Encontrar la ventana más larga donde cada espaciado entre filas es <= tolSpacing
-      let bestStart = 0, bestLen = 1;
-      let curStart = 0, curLen = 1;
-      for (let i = 0; i < diffs.length; i++) {
-        if (diffs[i] <= tolSpacing) {
-          curLen += 1;
+    try {
+      const allCys = candidates.map(c => c.cy).sort((a,b)=>a-b);
+      const total = allCys.length;
+      if (total > 0) {
+        // Queremos cubrir la franja que contiene al menos el 60% de los rects
+        const K = Math.max(1, Math.round(total * 0.6));
+        let bestI = 0, bestRange = Infinity;
+        for (let i = 0; i + K - 1 < total; i++) {
+          const range = allCys[i+K-1] - allCys[i];
+          if (range < bestRange) { bestRange = range; bestI = i; }
+        }
+        const cyMin = allCys[bestI];
+        const cyMax = allCys[Math.min(total-1, bestI + K - 1)];
+        const bandTol = Math.max(4, medH * 0.5);
+        const bandMin = cyMin - bandTol;
+        const bandMax = cyMax + bandTol;
+        const filtered = validRows.filter(r => r.cy >= bandMin && r.cy <= bandMax);
+        if (filtered.length >= Math.max(1, Math.round(validRows.length * 0.3))) {
+          seatingRows = filtered;
+          console.log(`initSvg: seleccionada banda vertical cy in [${Math.round(bandMin)},${Math.round(bandMax)}] con ${seatingRows.length} filas para numerar (de ${validRows.length})`);
         } else {
-          if (curLen > bestLen) { bestLen = curLen; bestStart = curStart; }
-          curStart = i+1; curLen = 1;
+          console.log('initSvg: banda vertical no suficiente, usando todas las filas detectadas');
         }
       }
-      if (curLen > bestLen) { bestLen = curLen; bestStart = curStart; }
-
-      // Si la mejor ventana representa al menos la mitad de las filas detectadas, úsala
-      if (bestLen >= Math.max(2, Math.round(validRows.length * 0.4))) {
-        seatingRows = validRows.slice(bestStart, bestStart + bestLen);
-        console.log(`initSvg: filtradas ${validRows.length - seatingRows.length} filas (etiquetas) — usando ${seatingRows.length} filas para numerar`);
-      } else {
-        console.log('initSvg: no se identificó claramente una ventana de filas; usando todas las filas detectadas');
-      }
+    } catch (e) {
+      console.warn('initSvg: error aplicando filtro por banda vertical:', e);
     }
 
     // Numerar: iterar filas bottom->top y dentro de cada fila ordenar por cx asc
