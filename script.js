@@ -19,9 +19,13 @@ document.addEventListener("DOMContentLoaded", () => {
     return;
   }
 
+  // Variables compartidas entre el init del SVG y las funciones de marcado
+  let overlay = null;
+  let svgDocRef = null; // referencia al documento SVG para usarla fuera de initSvg
+  let lastSeat = null;
+
   svgObject.addEventListener("load", () => {
     // Crear helper initSvg para poder invocarlo también si el SVG ya está disponible
-    let overlay = null; // declarado aquí para que marcarAsiento lo vea
     function initSvg(svgDoc) {
       if (!svgDoc) {
         console.error("initSvg: svgDoc nulo");
@@ -30,6 +34,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       try {
         const svgRoot = svgDoc.documentElement;
+        // guardar la referencia del documento SVG en scope superior
+        svgDocRef = svgDoc;
         overlay = svgDoc.getElementById("overlay-marks");
         if (!overlay) {
           overlay = svgDoc.createElementNS("http://www.w3.org/2000/svg", "g");
@@ -39,8 +45,8 @@ document.addEventListener("DOMContentLoaded", () => {
           svgRoot.appendChild(overlay);
         }
 
-        // Detectar todos los rects candidatos y tomar medidas para identificar el bloque principal de asientos
-        const allRects = Array.from(svgDoc.querySelectorAll("rect.cls-3"));
+            // Detectar todos los rects candidatos (incluir todos los rect por seguridad) y tomar medidas
+            const allRects = Array.from(svgDoc.querySelectorAll("rect"));
     const rectInfos = allRects.map(r => {
       const x = parseFloat(r.getAttribute("x")) || 0;
       const y = parseFloat(r.getAttribute("y")) || 0;
@@ -132,8 +138,7 @@ document.addEventListener("DOMContentLoaded", () => {
   info.textContent = '';
   console.log(debugMsg);
 
-        // Exponer variables en closure para que otras partes puedan usarlas
-        return { svgDoc, overlay };
+        // svgDocRef y overlay quedaron asignados en scope superior
       } catch (err) {
         console.error('Error initSvg:', err);
         info.textContent = '❌ Error inicializando mapa: ' + (err.message || err);
@@ -163,10 +168,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }, 300);
 
-    let lastSeat = null;
     function marcarAsiento(numero) {
       try {
-        while (overlay.firstChild) overlay.removeChild(overlay.firstChild);
+        if (!svgDocRef) {
+          info.textContent = '❌ El mapa SVG no está inicializado.';
+          return;
+        }
+        while (overlay && overlay.firstChild) overlay.removeChild(overlay.firstChild);
 
         // Restaurar color del último asiento seleccionado usando data-orig-fill si existe
         if (lastSeat) {
@@ -176,7 +184,7 @@ document.addEventListener("DOMContentLoaded", () => {
           lastSeat = null;
         }
 
-        const seat = svgDoc.querySelector(`rect[data-seat='${numero}']`);
+        const seat = svgDocRef.querySelector(`rect[data-seat='${numero}']`);
         if (!seat) {
           info.textContent = `❌ Asiento ${numero} no encontrado`;
           return;
@@ -200,20 +208,22 @@ document.addEventListener("DOMContentLoaded", () => {
       const cy = y + h / 2;
       const offset = Math.min(w, h) / 2;
 
-      const line1 = svgDoc.createElementNS("http://www.w3.org/2000/svg", "line");
+      const line1 = svgDocRef.createElementNS("http://www.w3.org/2000/svg", "line");
       line1.setAttribute("x1", cx - offset);
       line1.setAttribute("y1", cy - offset);
       line1.setAttribute("x2", cx + offset);
       line1.setAttribute("y2", cy + offset);
 
-      const line2 = svgDoc.createElementNS("http://www.w3.org/2000/svg", "line");
+      const line2 = svgDocRef.createElementNS("http://www.w3.org/2000/svg", "line");
       line2.setAttribute("x1", cx - offset);
       line2.setAttribute("y1", cy + offset);
       line2.setAttribute("x2", cx + offset);
       line2.setAttribute("y2", cy - offset);
 
-      overlay.appendChild(line1);
-      overlay.appendChild(line2);
+      if (overlay) {
+        overlay.appendChild(line1);
+        overlay.appendChild(line2);
+      }
 
       const row = seat.getAttribute("data-row");
       const col = seat.getAttribute("data-col");
@@ -276,7 +286,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!r.ok) throw new Error('no-csv');
       return r.text();
     }).then(text => {
-      const rows = parseCSV(text);
+    // Eliminar BOM si existe
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    const rows = parseCSV(text);
       if (!rows.length) { nameInfo.textContent = '❌ CSV vacío o inválido.'; return; }
       const headers = rows[0].map(h => h.trim());
       const data = rows.slice(1).map(rw => {
