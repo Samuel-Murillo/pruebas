@@ -33,35 +33,95 @@ document.addEventListener("DOMContentLoaded", () => {
       svgRoot.appendChild(overlay);
     }
 
-    // Solo numerar los rectángulos blancos (asientos)
-    // Se asume que los asientos tienen fill="#fff" o fill="white" y los verdes no
+    // Detectar todos los rects candidatos y tomar medidas para identificar el bloque principal de asientos
     const allRects = Array.from(svgDoc.querySelectorAll("rect.cls-3"));
-    const seats = allRects.filter(rect => {
-      const fill = rect.getAttribute("fill");
-      return fill === "#fff" || fill === "white" || fill === null || fill === "";
+    const rectInfos = allRects.map(r => {
+      const x = parseFloat(r.getAttribute("x")) || 0;
+      const y = parseFloat(r.getAttribute("y")) || 0;
+      const w = parseFloat(r.getAttribute("width")) || 0;
+      const h = parseFloat(r.getAttribute("height")) || 0;
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+      const fill = r.getAttribute("fill");
+      return { r, x, y, w, h, cx, cy, fill };
     });
 
-    // Ordenar por y (de menor a mayor, de abajo hacia arriba), luego por x (de menor a mayor, de izquierda a derecha)
-    seats.sort((a, b) => {
-      const ay = parseFloat(a.getAttribute("y"));
-      const by = parseFloat(b.getAttribute("y"));
-      if (ay !== by) return ay - by;
-      const ax = parseFloat(a.getAttribute("x"));
-      const bx = parseFloat(b.getAttribute("x"));
-      return ax - bx;
+    // Filtrar por tamaño: calcular mediana de anchuras/alturas y mantener rects similares
+    function median(values) {
+      const s = values.slice().sort((a,b)=>a-b);
+      const m = Math.floor(s.length/2);
+      return s.length%2===0 ? (s[m-1]+s[m])/2 : s[m];
+    }
+    const widths = rectInfos.map(i=>i.w).filter(v=>v>0);
+    const heights = rectInfos.map(i=>i.h).filter(v=>v>0);
+    const medW = widths.length ? median(widths) : 0;
+    const medH = heights.length ? median(heights) : 0;
+
+    const sizeTol = 0.6; // aceptar entre 60% y 140% del tamaño medio
+    const candidates = rectInfos.filter(i => {
+      if (!i.w || !i.h) return false;
+      const szOk = i.w >= medW*sizeTol && i.w <= medW*(2-sizeTol) && i.h >= medH*sizeTol && i.h <= medH*(2-sizeTol);
+      // excluir los pequeños cuadros de numeración verdes (por ejemplo tienen fill diferente)
+      const isLikelySeat = szOk && !(i.fill && i.fill.toLowerCase().includes("#c"));
+      return isLikelySeat;
     });
 
-    // Determinar columnas por la estructura visual (ajusta si es necesario)
-    const cols = 26;
-    // Numerar por filas: primero fila 1, columna 1 a 26; luego fila 2, etc.
-    seats.forEach((rect, i) => {
-      const row = Math.floor(i / cols) + 1;
-      const col = (i % cols) + 1;
-      const seatNum = i + 1;
-      rect.setAttribute("data-seat", seatNum);
-      rect.setAttribute("data-row", row);
-      rect.setAttribute("data-col", col);
+    if (candidates.length === 0) {
+      info.textContent = "❌ No se detectaron asientos válidos en el SVG.";
+      return;
+    }
+
+    // Agrupar por cy (centro Y) usando tolerancia basada en mediana de altura
+    const tol = Math.max(4, medH*0.5);
+    const rows = [];
+    candidates.forEach(ci => {
+      let found = false;
+      for (const row of rows) {
+        if (Math.abs(row.cy - ci.cy) <= tol) {
+          row.items.push(ci);
+          row.cy = (row.cy * (row.items.length-1) + ci.cy) / row.items.length; // actualizar rep cy
+          found = true;
+          break;
+        }
+      }
+      if (!found) rows.push({ cy: ci.cy, items: [ci] });
     });
+
+    // Mantener solo filas con muchos asientos (descartar filas ruidosas)
+    const maxCount = Math.max(...rows.map(r=>r.items.length));
+    const validRows = rows.filter(r => r.items.length >= Math.max(4, Math.round(maxCount*0.4)));
+    if (validRows.length === 0) {
+      info.textContent = "❌ No se encontraron filas consistentes de asientos.";
+      return;
+    }
+
+    // Ordenar filas por cy descendente (bottom -> top)
+    validRows.sort((a,b) => b.cy - a.cy);
+
+    // Numerar: iterar filas bottom->top y dentro de cada fila ordenar por cx asc
+    let seatIndex = 0;
+    validRows.forEach((rowObj, rowIdx) => {
+      const sorted = rowObj.items.sort((a,b) => a.cx - b.cx);
+      sorted.forEach((ci, colIdx) => {
+        seatIndex += 1;
+        ci.r.setAttribute("data-seat", seatIndex);
+        ci.r.setAttribute("data-row", rowIdx+1);
+        ci.r.setAttribute("data-col", colIdx+1);
+        // guardar color original
+        const orig = ci.r.getAttribute("data-orig-fill");
+        if (!orig) ci.r.setAttribute("data-orig-fill", ci.r.getAttribute("fill") || "#ffffff");
+      });
+    });
+
+    // Mostrar pequeño debug para confirmar la posición de algunos asientos
+    const firstAssigned = svgDoc.querySelector("rect[data-seat='1']");
+    if (firstAssigned) {
+      const fx = firstAssigned.getAttribute('x');
+      const fy = firstAssigned.getAttribute('y');
+      info.textContent = `Asignados ${seatIndex} asientos. Asiento 1 en x=${fx}, y=${fy}`;
+    } else {
+      info.textContent = `Asignados ${seatIndex} asientos.`;
+    }
 
 
     let lastSeat = null;
