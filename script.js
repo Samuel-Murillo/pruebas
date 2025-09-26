@@ -109,9 +109,42 @@ document.addEventListener("DOMContentLoaded", () => {
     // Ordenar filas por cy descendente (bottom -> top)
     validRows.sort((a,b) => b.cy - a.cy);
 
+    // Excluir filas de etiquetas (recuadros verdes) buscando la ventana más larga
+    // de filas con separación regular (espaciado similar entre filas de asientos).
+    let seatingRows = validRows;
+    if (validRows.length > 1) {
+      const diffs = [];
+      for (let i = 0; i < validRows.length - 1; i++) {
+        diffs.push(Math.abs(validRows[i].cy - validRows[i+1].cy));
+      }
+      const medSpacing = median(diffs);
+      const tolSpacing = Math.max(2, medSpacing * 1.6);
+
+      // Encontrar la ventana más larga donde cada espaciado entre filas es <= tolSpacing
+      let bestStart = 0, bestLen = 1;
+      let curStart = 0, curLen = 1;
+      for (let i = 0; i < diffs.length; i++) {
+        if (diffs[i] <= tolSpacing) {
+          curLen += 1;
+        } else {
+          if (curLen > bestLen) { bestLen = curLen; bestStart = curStart; }
+          curStart = i+1; curLen = 1;
+        }
+      }
+      if (curLen > bestLen) { bestLen = curLen; bestStart = curStart; }
+
+      // Si la mejor ventana representa al menos la mitad de las filas detectadas, úsala
+      if (bestLen >= Math.max(2, Math.round(validRows.length * 0.4))) {
+        seatingRows = validRows.slice(bestStart, bestStart + bestLen);
+        console.log(`initSvg: filtradas ${validRows.length - seatingRows.length} filas (etiquetas) — usando ${seatingRows.length} filas para numerar`);
+      } else {
+        console.log('initSvg: no se identificó claramente una ventana de filas; usando todas las filas detectadas');
+      }
+    }
+
     // Numerar: iterar filas bottom->top y dentro de cada fila ordenar por cx asc
     let seatIndex = 0;
-    validRows.forEach((rowObj, rowIdx) => {
+    seatingRows.forEach((rowObj, rowIdx) => {
       const sorted = rowObj.items.sort((a,b) => a.cx - b.cx);
       sorted.forEach((ci, colIdx) => {
         seatIndex += 1;
